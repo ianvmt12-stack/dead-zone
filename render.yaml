@@ -6,9 +6,10 @@
 services:
   - type: web
     name: dead-zone
-    runtime: null # sitio estático
+    # `static` = sitio estático (sin servidor). El juego es 100% cliente.
+    runtime: static
     buildCommand: npm ci && npm run build
     staticPublishPath: ./dist
     pullRequestPreviewsEnabled: true
-    # Render sirve por defecto en *.onrender.com con HTTPS,
-    # que es lo que necesita la Pointer Lock API.
+    # Render sirve por defecto en *.onrender.com con HTTPS, que es
+    # obligatorio para que funcione la Pointer Lock API (captura del ratón).
