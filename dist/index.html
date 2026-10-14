@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DEAD ZONE — Supervivencia</title>
+    <script type="module" crossorigin src="./assets/index-BYM5vfx6.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/three-DBeIWzOs.js">
+    <link rel="stylesheet" crossorigin href="./assets/index-YnJLiIMS.css">
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="scene"></canvas>
+
+      <!-- ══════════════ HUD ══════════════ -->
+      <div id="hud" class="hidden">
+        <div class="crosshair" id="crosshair">
+          <span class="ch-t"></span><span class="ch-b"></span>
+          <span class="ch-l"></span><span class="ch-r"></span>
+          <i class="ch-dot"></i>
+        </div>
+
+        <div class="hud-corner hud-tl">
+          <div class="block">
+            <span class="label">OLEADA</span>
+            <span class="value big" id="stat-round">1</span>
+          </div>
+          <div class="block" id="timer-block" hidden>
+            <span class="label">PRÓXIMA OLEADA EN</span>
+            <span class="value big accent" id="stat-timer">25</span>
+          </div>
+          <div class="sub" id="stat-remaining">Enemigos: 0</div>
+        </div>
+
+        <div class="hud-corner hud-tr">
+          <div class="block right">
+            <span class="label">PUNTOS</span>
+            <span class="value big" id="stat-points">0</span>
+          </div>
+        </div>
+
+        <div class="hud-corner hud-bl">
+          <div class="health">
+            <div class="health-track">
+              <i id="health-fill"></i>
+              <b id="health-ghost"></b>
+            </div>
+            <span class="health-text"><b id="health-value">100</b> PV</span>
+          </div>
+        </div>
+
+        <div class="hud-corner hud-br">
+          <div class="weapon-info">
+            <div class="weapon-name">
+              <span id="weapon-label">Pistola</span>
+              <em id="weapon-level">Nv.0</em>
+            </div>
+            <div class="ammo" id="ammo-box">
+              <span class="mag" id="ammo-mag">12</span>
+              <span class="sep">/</span>
+              <span class="reserve" id="ammo-reserve">0</span>
+            </div>
+            <div class="reload-bar" id="reload-bar" hidden><i></i></div>
+            <div class="hint" id="reload-hint">Pulsa <kbd>R</kbd> para recargar</div>
+          </div>
+        </div>
+
+        <div id="toasts"></div>
+        <div id="damage-numbers"></div>
+        <div id="vignette"></div>
+        <div id="flash"></div>
+      </div>
+
+      <!-- ══════════════ Controles táctiles (móvil) ══════════════ -->
+      <div id="touch-layer"></div>
+
+      <!-- ══════════════ TIENDA ══════════════ -->
+      <div id="shop" class="overlay hidden">
+        <div class="panel shop-panel">
+          <header class="shop-head">
+            <div class="shop-title">
+              <h2>TIENDA DE CAMPO</h2>
+              <p id="shop-subtitle">Zona segura · Oleada superada</p>
+            </div>
+            <div class="shop-meta">
+              <div class="meta-item">
+                <span class="label">PUNTOS</span>
+                <b id="shop-points">0</b>
+              </div>
+              <div class="meta-item countdown">
+                <span class="label">EMPIEZA EN</span>
+                <b id="shop-timer">25</b>
+              </div>
+            </div>
+          </header>
+
+          <div class="shop-body">
+            <section class="shop-col">
+              <h3>Armamento</h3>
+              <p class="col-hint">Compra y cambia de arma con las teclas <kbd>1</kbd>–<kbd>5</kbd></p>
+              <div id="shop-weapons" class="card-list"></div>
+            </section>
+
+            <section class="shop-col">
+              <h3>Mejoras · <span id="upgrade-weapon-name">Pistola</span></h3>
+              <p class="col-hint">Cada arma admite <b>3 niveles</b>: daño, cadencia y cargador.</p>
+              <div id="shop-upgrades" class="card-list"></div>
+              <div id="upgrade-stats" class="stat-rows"></div>
+            </section>
+
+            <section class="shop-col">
+              <h3>Suministros</h3>
+              <p class="col-hint">Munición de reserva y mejoras permanentes.</p>
+              <div id="shop-supplies" class="card-list"></div>
+            </section>
+          </div>
+
+          <footer class="shop-foot">
+            <span class="foot-note">Munición y salud se recargan gratis entre oleadas.</span>
+            <button class="btn primary" id="shop-close">Volver al campo <kbd>B</kbd></button>
+          </footer>
+        </div>
+      </div>
+
+      <!-- ══════════════ MENÚ PRINCIPAL ══════════════ -->
+      <div id="menu" class="overlay">
+        <div class="panel menu-panel">
+          <div class="brand">
+            <h1>DEAD<span>ZONE</span></h1>
+            <p class="tagline">Sobrevive a la horda. Gasta tus puntos. Mejora tu arsenal.</p>
+          </div>
+
+          <div class="controls-grid">
+            <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div><span>Moverse</span>
+            <div><kbd>Ratón</kbd></div><span>Mirar</span>
+            <div><kbd>Clic izq.</kbd></div><span>Disparar</span>
+            <div><kbd>R</kbd></div><span>Recargar</span>
+            <div><kbd>Shift</kbd></div><span>Correr</span>
+            <div><kbd>Espacio</kbd></div><span>Saltar</span>
+            <div><kbd>1</kbd>–<kbd>5</kbd></div><span>Cambiar arma</span>
+            <div><kbd>B</kbd></div><span>Tienda (entre oleadas)</span>
+            <div><kbd>Esc</kbd></div><span>Pausa</span>
+          </div>
+
+          <div class="menu-options">
+            <label class="opt">
+              <span>Calidad gráfica</span>
+              <select id="opt-quality">
+                <option value="high">Alta (sombras)</option>
+                <option value="low">Baja (sin sombras)</option>
+              </select>
+            </label>
+            <label class="opt">
+              <span>Sensibilidad</span>
+              <input id="opt-sens" type="range" min="4" max="30" step="1" value="14" />
+            </label>
+            <label class="opt">
+              <span>Volumen</span>
+              <input id="opt-volume" type="range" min="0" max="100" step="1" value="70" />
+            </label>
+          </div>
+
+          <button class="btn primary big" id="btn-start">Iniciar partida</button>
+        </div>
+      </div>
+
+      <!-- ══════════════ PAUSA ══════════════ -->
+      <div id="pause" class="overlay hidden">
+        <div class="panel pause-panel">
+          <h2>PAUSA</h2>
+          <div class="pause-stats" id="pause-stats"></div>
+          <button class="btn primary big" id="btn-resume">Continuar</button>
+          <button class="btn ghost" id="btn-quit">Abandonar partida</button>
+        </div>
+      </div>
+
+      <!-- ══════════════ FIN DE PARTIDA ══════════════ -->
+      <div id="gameover" class="overlay hidden">
+        <div class="panel over-panel">
+          <h2 class="dead">HAS MUERTO</h2>
+          <div class="over-stats" id="over-stats"></div>
+          <button class="btn primary big" id="btn-retry">Intentarlo de nuevo</button>
+        </div>
+      </div>
+    </div>
+
+  </body>
+</html>

@@ -1,5 +1,8 @@
 node_modules/
-dist/
 .DS_Store
 *.log
 .vite/
+
+# dist/ NO se ignora a proposito: se versiona el build ya hecho como red de
+# seguridad. Si el build de Render falla o el Build Command queda vacio, el
+# sitio sigue sirviendo contenido. ~620 KB, no compensa la headache.
