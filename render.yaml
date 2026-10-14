@@ -1,0 +1,14 @@
+# ══════════════════════════════════════════════════════════
+#  DEAD ZONE — despliegue en Render
+#  Site estático: el juego es 100% cliente, no hace falta servidor.
+# ══════════════════════════════════════════════════════════
+
+services:
+  - type: web
+    name: dead-zone
+    runtime: null # sitio estático
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    pullRequestPreviewsEnabled: true
+    # Render sirve por defecto en *.onrender.com con HTTPS,
+    # que es lo que necesita la Pointer Lock API.

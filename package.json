@@ -1,0 +1,20 @@
+{
+  "name": "dead-zone",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Juego 3D de supervivencia contra hordas de zombies en el navegador",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test tests/game.test.mjs tests/shop.test.mjs"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "jsdom": "^30.1.2",
+    "vite": "^8.3.4"
+  }
+}
