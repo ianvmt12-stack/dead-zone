@@ -19,6 +19,8 @@ export class ZombieManager {
     this.zombies = [];
 
     this._dummy = new THREE.Object3D();
+    this._frame = new THREE.Object3D();
+    this._localVec = new THREE.Vector3();
     this._color = new THREE.Color();
     this._tmp = new THREE.Vector3();
     this._tmp2 = new THREE.Vector3();
@@ -32,11 +34,20 @@ export class ZombieManager {
   }
 
   _buildMeshes(shadows) {
-    const geoBody = new THREE.BoxGeometry(0.62, 1.0, 0.36);
-    geoBody.translate(0, 0.5, 0); // pivote en los pies
-    const geoHead = new THREE.BoxGeometry(0.34, 0.34, 0.34);
-    const geoArm = new THREE.BoxGeometry(0.17, 0.86, 0.17);
-    geoArm.translate(0, -0.43, 0); // pivote en el hombro
+    // Proporciones del maniquí (metros). Todas las piezas tienen que cuadrar
+  // entre sí: si el torso no llega hasta donde empiezan los hombros, las
+  // piezas se ven sueltas flotando.
+  const geoLegs = new THREE.BoxGeometry(0.44, 0.9, 0.28);
+  geoLegs.translate(0, 0.45, 0); // pivote en los pies
+
+  const geoBody = new THREE.BoxGeometry(0.6, 0.72, 0.36);
+  geoBody.translate(0, 0.36, 0); // pivote en la cintura
+
+  const geoHead = new THREE.BoxGeometry(0.32, 0.32, 0.32);
+  geoHead.translate(0, 0.16, 0); // pivote en el cuello
+
+  const geoArm = new THREE.BoxGeometry(0.16, 0.86, 0.16);
+  geoArm.translate(0, -0.43, 0); // pivote en el hombro
 
     const matBody = new THREE.MeshStandardMaterial({ roughness: 0.92, metalness: 0.02 });
     const matHead = new THREE.MeshStandardMaterial({ roughness: 0.85 });
@@ -57,13 +68,14 @@ export class ZombieManager {
     };
 
     this.meshes = {
+      legs: mk(geoLegs, matBody),
       body: mk(geoBody, matBody),
       head: mk(geoHead, matHead),
       armL: mk(geoArm, matArm),
       armR: mk(geoArm, matArm),
     };
+    this.order = ['legs', 'body', 'head', 'armL', 'armR'];
 
-    // Escala de referencia (1 unidad = cuerpo humano).
     this.group = new THREE.Group();
     this.scene.add(this.group);
     for (const m of Object.values(this.meshes)) this.group.add(m);
@@ -186,6 +198,7 @@ export class ZombieManager {
   raycast(origin, dir, maxDist = 120) {
     let best = null;
     let bestDist = maxDist;
+    let bestY = origin.y;
 
     // Limite de distancia por el escenario: las balas no lo atraviesan.
     const wall = this.arena.raycastWorld(origin, dir, maxDist);
@@ -202,16 +215,19 @@ export class ZombieManager {
 
       best = z;
       bestDist = t;
+      bestY = y; // fuera del bucle: aquí es donde se usa
     }
 
     if (!best) {
-      return wall ? { zombie: null, dist: wall.dist, point: this._tmp.copy(origin).addScaledVector(dir, wall.dist).clone(), world: true } : null;
+      return wall
+        ? { zombie: null, dist: wall.dist, point: this._tmp.copy(origin).addScaledVector(dir, wall.dist).clone(), world: true }
+        : null;
     }
     return {
       zombie: best,
       dist: bestDist,
-      point: new THREE.Vector3(origin.x + dir.x * bestDist, y, origin.z + dir.z * bestDist),
-      head: y > best.height * 0.78,
+      point: new THREE.Vector3(origin.x + dir.x * bestDist, bestY, origin.z + dir.z * bestDist),
+      head: bestY > best.height * 0.78,
     };
   }
 
@@ -305,16 +321,13 @@ export class ZombieManager {
     zombie.stagger = Math.min(0.45, k * 0.5);
   }
 
-  /** Escribe las matrices de las instancias. */
+/** Escribe las matrices de las instancias. */
   _render() {
-    const { body, head, armL, armR } = this.meshes;
+    const { legs, body, head, armL, armR } = this.meshes;
     const d = this._dummy;
     const count = this.zombies.length;
 
-    body.count = count;
-    head.count = count;
-    armL.count = count;
-    armR.count = count;
+    for (const m of this.order.map((k) => this.meshes[k])) m.count = count;
 
     for (let i = 0; i < count; i++) {
       const z = this.zombies[i];
@@ -324,64 +337,80 @@ export class ZombieManager {
       const bob = Math.abs(Math.sin(z.phase)) * 0.07 * (t.id === 'brute' ? 0.7 : 1);
       const sway = Math.sin(z.phase) * 0.06;
       const lean = z.lean + (z.attackAnim > 0 ? Math.sin(z.attackAnim * Math.PI) * 0.3 : 0);
+      const yaw = Math.atan2(z.vel.x, z.vel.z);
 
-      const scaleY = t.height / 1.85;
+      const scaleY = t.height / ZOMBIE_SKELETON.totalHeight;
       const scaleXZ = t.radius / 0.42;
+      const S = ZOMBIE_SKELETON;
 
-      // ── Cuerpo ──
-      d.position.set(z.pos.x + sway * 0.3, bob, z.pos.z);
-      d.rotation.set(lean, Math.atan2(z.vel.x, z.vel.z), sway * 0.4);
+      // Marco del zombie: posicion, inclinacion y orientacion.
+      // Todas las piezas se colocan en ESPACIO LOCAL respecto a este marco y
+      // luego se pasan a mundo. Sumar offsets en X/Z directamente hacia que al
+      // girar el zombie la cabeza y los brazos se descolocaran del cuerpo.
+      this._frame.position.set(z.pos.x + sway * 0.3, bob, z.pos.z);
+      this._frame.rotation.set(lean, yaw, sway * 0.4);
+      this._frame.updateMatrixWorld();
+
+      // ── Piernas (pivote en los pies) ──
+      d.position.copy(this._frame.position);
+      d.rotation.copy(this._frame.rotation);
+      d.scale.set(scaleXZ, scaleY, scaleXZ);
+      d.updateMatrix();
+      legs.setMatrixAt(i, d.matrix);
+      this._tint(legs, i, z, t.color, 0.82);
+
+      // ── Torso (pivote en la cintura) ──
+      d.position.copy(this._local(0, S.waist * scaleY, 0));
+      d.rotation.set(lean * 0.8, yaw, sway * 0.5);
       d.scale.set(scaleXZ, scaleY, scaleXZ);
       d.updateMatrix();
       body.setMatrixAt(i, d.matrix);
       this._tint(body, i, z, t.color, 1);
 
-      // ── Cabeza ──
-      const headY = 1.62 * scaleY;
-      d.position.set(
-        z.pos.x + sway * 0.3 + Math.sin(lean) * headY * 0.5,
-        bob + headY,
-        z.pos.z + Math.cos(lean) * headY * 0.5,
-      );
-      d.rotation.set(lean * 1.4, Math.atan2(z.vel.x, z.vel.z), sway * 0.8);
-      d.scale.setScalar(scaleXZ);
+      // ── Cabeza (pivote en el cuello) ──
+      d.position.copy(this._local(0, S.neck * scaleY, 0));
+      d.rotation.set(lean * 1.5, yaw, sway * 0.8);
+      d.scale.set(scaleXZ, scaleY, scaleXZ);
       d.updateMatrix();
       head.setMatrixAt(i, d.matrix);
-      this._tint(head, i, z, t.color, 1.25); // la cabeza es algo más clara
+      this._tint(head, i, z, t.color, 1.3); // algo mas clara que el cuerpo
 
-      // ── Brazos (balanceo + ataque) ──
-      const armSwing = Math.sin(z.phase) * 0.55;
+      // ── Brazos (pivote en el hombro) ──
+      const armSwing = Math.sin(z.phase) * 0.5;
       const attack = z.attackAnim > 0 ? Math.sin(z.attackAnim * Math.PI) : 0;
 
-      for (const [mesh, side, phase] of [
-        [armL, -1, 0],
-        [armR, 1, Math.PI * 0.35],
+      for (const [mesh, side] of [
+        [armL, -1],
+        [armR, 1],
       ]) {
-        const shoulderY = 1.38 * scaleY;
-        const shoulderX = side * 0.4 * scaleXZ;
-        // Convertimos a espacio mundo usando la rotación del zombie.
-        const yaw = Math.atan2(z.vel.x, z.vel.z);
-        const cos = Math.cos(yaw);
-        const sin = Math.sin(yaw);
-        d.position.set(
-          z.pos.x + shoulderX * cos + sway * 0.3,
-          bob + shoulderY,
-          z.pos.z - shoulderX * sin,
-        );
-        // Los brazos se adelantan al caminar y se lanzan hacia delante al atacar.
-        const pitch = -armSwing * (side > 0 ? 1 : -1) * 0.9 - attack * 2.1 - 0.35;
+        d.position.copy(this._local(
+          side * S.shoulderX * scaleXZ,
+          S.shoulderY * scaleY,
+          0,
+        ));
+        // Se balancean al caminar y se lanzan hacia delante al atacar.
+        const pitch = -armSwing * side * 0.9 - attack * 2.1 - 0.35;
         d.rotation.set(pitch + lean, yaw, side * 0.14);
         d.scale.setScalar(scaleXZ);
         d.updateMatrix();
         mesh.setMatrixAt(i, d.matrix);
-        this._tint(mesh, i, z, t.color, 0.85);
+        this._tint(mesh, i, z, t.color, 0.9);
       }
     }
 
-    for (const m of [body, head, armL, armR]) {
+    for (const m of this.order.map((k) => this.meshes[k])) {
       m.instanceMatrix.needsUpdate = true;
       m.instanceColor.needsUpdate = true;
     }
+  }
+
+  /**
+   * Convierte un offset local (respecto al marco del zombie) a espacio mundo.
+   * Es lo que mantiene cabeza y brazos pegados al cuerpo al girar.
+   */
+_local(x, y, z) {
+    this._localVec.set(x, y, z).applyMatrix4(this._frame.matrixWorld);
+    return this._localVec;
   }
 
   /** Aplica color base + destello rojo al recibir un impacto. */
@@ -401,5 +430,19 @@ export class ZombieManager {
     }
   }
 }
+
+/**
+ * Proporciones del zombie en metros, para un cuerpo de referencia de 1,90.
+ * La geometría de cada pieza y estas alturas tienen que estar de acuerdo:
+ * si el torso no llega hasta los hombros, las piezas se ven sueltas.
+ */
+const ZOMBIE_SKELETON = {
+  totalHeight: 1.9,
+  legHeight: 0.9, // las piernas van de 0 a 0,9
+  waist: 0.88, // el torso se apoya aqui: de 0,88 a 1,60
+  shoulderY: 1.44,
+  shoulderX: 0.38,
+  neck: 1.58, // la cabeza corona en 1,90
+};
 
 const FLASH_COLOR = new THREE.Color(0xff3020);

@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test tests/game.test.mjs tests/shop.test.mjs"
+    "test": "node --test tests/game.test.mjs tests/shop.test.mjs tests/combat.test.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"
